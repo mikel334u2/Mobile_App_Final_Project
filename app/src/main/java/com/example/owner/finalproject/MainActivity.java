@@ -4,15 +4,10 @@ import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.graphics.Color;
-import android.media.Image;
+import android.os.Bundle;
 import android.provider.MediaStore;
 import android.support.v7.app.AppCompatActivity;
-import android.os.Bundle;
-import android.content.pm.PackageInfo;
-import android.util.Log;
-import android.view.Menu;
 import android.view.View;
-import android.widget.Button;
 import android.widget.ImageButton;
 import android.widget.ImageView;
 import android.widget.TextView;
@@ -63,7 +58,7 @@ public class MainActivity extends AppCompatActivity {
             Bitmap photo = (Bitmap) extras.get("data");     //photo taken by the user gets saved as a bitmap as a photo
             pictureView.setImageBitmap(photo);
 
-            extractColor(photo, 1);
+            extractColor(photo, 1, photo.getWidth()/2, photo.getHeight()/2);
             ImageView radius = findViewById(R.id.pictureView_circle);
             radius.setVisibility(View.VISIBLE);
             //complementary(0xFF0000);
@@ -87,76 +82,45 @@ public class MainActivity extends AppCompatActivity {
 
     }
 
-    public int extractColor(Bitmap bitmap, int radius){
-        // Gets center coordinates
-        int cx = bitmap.getWidth() / 2;
-        int cy = bitmap.getHeight() / 2;
+    public int extractColor(Bitmap bitmap, int radius, int cx, int cy){
 
         // if the radius is 1, return the color int of the center pixel
+        if (radius <= 1)
+            return bitmap.getPixel(cx,cy);
 
-        if (radius <= 1) {
-            int bitmapcolor = bitmap.getPixel(cx, cy);
-            f2_color = Integer.toHexString(bitmapcolor).toUpperCase();
-            f2_color = f2_color.replace("FF", "#");
+        // Gets width/height
+        int width = bitmap.getWidth();
+        int height = bitmap.getHeight();
 
-
-            TextView color = findViewById(R.id.color);
-            color.setText(f2_color);
-            Log.d("Michael", "Color: " + f2_color);
-            return bitmap.getPixel(cx, cy);
-        }
-
-        // Get the area of the reticle, no. of pixels to count is the area
-
-
-        double area = Math.PI * radius * radius;
-        int[][] rgb = new int[(int)Math.ceil(area)][3];
+        int reds = 0;
+        int greens = 0;
+        int blues = 0;
 
         // Loop through a square and add these specific pixels to rgb array
-        int i = 0;
-        for (int x = cx - radius; x < cx + radius && i < rgb.length; x++){
-            for (int y = cy - radius; y < cy + radius && i < rgb.length; y++){
-                if (Math.hypot(cx - x, cy - y) >= radius)
+        int count = 0;
+        for (int x = cx - radius; x < cx + radius; x++){
+            for (int y = cy - radius; y < cy + radius; y++){
+                boolean inBounds = (x < width) && (x >= 0) && (y < height) && (y >= 0);
+                if (Math.hypot(cx - x, cy - y) >= radius || !inBounds)
                     continue;
                 int pixel = bitmap.getPixel(x,y);
-                rgb[i][0] = Color.red(pixel);
-                rgb[i][1] = Color.blue(pixel);
-                rgb[i][2] = Color.green(pixel);
-                i++;
+                reds += Color.red(pixel);
+                greens += Color.green(pixel);
+                blues += Color.blue(pixel);
+                count++;
             }
         }
 
         // Take the average of the colors in the array and return it
-        int redAvg = 0;
-        int blueAvg = 0;
-        int greenAvg = 0;
-
-        for (i = 0; i < rgb.length; i++){
-            redAvg += rgb[i][0];
-            blueAvg += rgb[i][1];
-            greenAvg += rgb[i][2];
-        }
-
-        redAvg /= rgb.length;
-        blueAvg /= rgb.length;
-        greenAvg /= rgb.length;
-
-
-        String f_color = String.format("#%02X%02X%02X", redAvg, blueAvg, greenAvg);
-
-        TextView color = findViewById(R.id.color);
-        color.setText (f_color);
-        Log.d("Michael", "Color: " + f_color);
-
-        return Color.rgb(redAvg, greenAvg, blueAvg);
+        return Color.rgb(reds/count, greens/count, blues/count);
     }
-
 
     private double[] RGBtoHSL(int rgb){
 
         double h = 0;
         double s = 0;
         double l = 0;
+
         double r = Color.red(rgb) / 255;
         double g = Color.green(rgb) / 255;
         double b = Color.blue(rgb) / 255;
@@ -169,10 +133,8 @@ public class MainActivity extends AppCompatActivity {
 
         if (delta == 0)
             h = s = 0;
-
         else {
             s = delta / (1 - Math.abs(2 * l - 1));
-
             if (max == r)
                 h = ((g - b) / delta) % 6;
             else if (max == g)
@@ -180,17 +142,19 @@ public class MainActivity extends AppCompatActivity {
             else if (max == b)
                 h = (r - g) / delta + 4;
         }
+
         double[] hsl = {h * 60, s * 100, l * 100};
         return hsl;
     }
 
     private int HSLtoRGB(double[] hsl){
+
         double r = 0;
         double g = 0;
         double b = 0;
         double h = hsl[0];
-        double s = hsl[1];
-        double l = hsl[2];
+        double s = hsl[1] / 100;
+        double l = hsl[2] / 100;
 
         double delta = (1 - Math.abs(2 * l - 1)) * s;
         double x = delta * (1 - Math.abs((h / 60.0) % 2 - 1));
@@ -201,25 +165,21 @@ public class MainActivity extends AppCompatActivity {
             g = x;
             b = 0;
         }
-
         else if (h < 120){
             r = x;
             g = delta;
             b = 0;
         }
-
         else if (h < 180){
             r = 0;
             g = delta;
             b = x;
         }
-
         else if (h < 240){
             r = 0;
             g = x;
             b = delta;
         }
-
         else if (h < 300){
             r = x;
             g = 0;
@@ -235,16 +195,13 @@ public class MainActivity extends AppCompatActivity {
         g = Math.round((g + m) * 255);
         b = Math.round((b + m) * 255);
 
-       return Color.rgb((int)r,(int) g,(int)b);
-}
+        return Color.rgb((int) r, (int) g, (int) b);
+    }
 
     public int complementary(int rgb){
+
         double[] hsl = RGBtoHSL(rgb);
         hsl[0] = (hsl[0] + 180) % 360;
-
-        TextView color = findViewById(R.id.color);
-        color.setText (HSLtoRGB(hsl));
-
         return HSLtoRGB(hsl);
     }
 
